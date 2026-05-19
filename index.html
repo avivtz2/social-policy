@@ -220,9 +220,210 @@ select { padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); f
 
 <script src="data1.js"></script>
 <script src="data2.js"></script>
+<script src="data1.js"></script>
+<script src="data2.js"></script>
 <script>
-// כאן חובה להכניס את קוד הלוגיקה של האפליקציה
-// בלעדיו, האתר יוצג אך הכפתורים לא יגיבו
+let currentTopicId = 'all';
+let currentQAs = [];
+let fcIndex = 0;
+let fcData = [];
+
+function startLearning() {
+    const select = document.getElementById('topic-select');
+    currentTopicId = select.value;
+    const titleText = select.options[select.selectedIndex].text;
+    
+    document.getElementById('selection-screen').style.display = 'none';
+    document.getElementById('learning-screen').style.display = 'block';
+    document.getElementById('current-focus-title').innerText = titleText;
+    
+    // הצגת מודול ההשוואה רק אם נבחר פרק 3 או "כל החומר"
+    document.getElementById('comparison-card').style.display = (currentTopicId === 'ch3' || currentTopicId === 'all') ? 'block' : 'none';
+
+    loadSummary();
+    initFC();
+    showModule('understanding');
+}
+
+function backToSelection() {
+    document.getElementById('learning-screen').style.display = 'none';
+    document.getElementById('selection-screen').style.display = 'block';
+}
+
+function showModule(modId) {
+    document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    
+    document.getElementById(modId).classList.add('active');
+    document.getElementById('btn-' + modId).classList.add('active');
+}
+
+function loadSummary() {
+    const container = document.getElementById('summary-container');
+    const emptyState = document.getElementById('understanding-empty');
+    container.innerHTML = '';
+    
+    let chaptersToLoad = appData.chapters;
+    if (currentTopicId !== 'all') {
+        chaptersToLoad = appData.chapters.filter(ch => ch.id === currentTopicId);
+    }
+
+    if (chaptersToLoad.length === 0) {
+        emptyState.style.display = 'block';
+        return;
+    } else {
+        emptyState.style.display = 'none';
+    }
+
+    chaptersToLoad.forEach(ch => {
+        if(ch.fullSummary) {
+            container.innerHTML += `<div class="item-container"><h3 class="key-points-title">${ch.title}</h3><div style="display:block;" class="full-summary-content">${ch.fullSummary}</div></div>`;
+        }
+    });
+}
+
+function initFC() {
+    fcData = [];
+    let chaptersToLoad = appData.chapters;
+    if (currentTopicId !== 'all') {
+        chaptersToLoad = appData.chapters.filter(ch => ch.id === currentTopicId);
+    }
+    
+    chaptersToLoad.forEach(ch => {
+        if(ch.qas) {
+            ch.qas.forEach(qa => fcData.push({q: qa.q, a: qa.a, chTitle: ch.title}));
+        }
+    });
+
+    // ערבוב שאלות
+    fcData.sort(() => Math.random() - 0.5);
+    fcIndex = 0;
+    
+    document.getElementById('fc-active-state').style.display = 'flex';
+    document.getElementById('fc-empty-state').style.display = 'none';
+    
+    renderCard();
+}
+
+function renderCard() {
+    if (fcIndex >= fcData.length || fcData.length === 0) {
+        document.getElementById('fc-active-state').style.display = 'none';
+        document.getElementById('fc-empty-state').style.display = 'block';
+        return;
+    }
+    const card = document.getElementById('flashcard');
+    card.classList.remove('is-flipped');
+    
+    const item = fcData[fcIndex];
+    document.getElementById('fc-term').innerText = item.q;
+    document.getElementById('fc-meta').innerText = item.chTitle;
+    document.getElementById('fc-term-back').innerText = item.q;
+    document.getElementById('fc-def').innerText = item.a;
+    
+    document.getElementById('fc-btn-reveal').style.display = 'flex';
+    document.getElementById('fc-btn-actions').style.display = 'none';
+    
+    document.getElementById('card-counter').innerText = `כרטיס ${fcIndex + 1} מתוך ${fcData.length}`;
+}
+
+function revealCard() {
+    document.getElementById('flashcard').classList.add('is-flipped');
+    document.getElementById('fc-btn-reveal').style.display = 'none';
+    document.getElementById('fc-btn-actions').style.display = 'flex';
+}
+
+function markCard(remembered) {
+    if (!remembered) {
+        // דחיפת השאלה לסוף המערך כדי לחזור עליה שוב
+        fcData.push(fcData[fcIndex]);
+    }
+    fcIndex++;
+    setTimeout(renderCard, 200); // השהייה קלה למעבר חלק יותר
+}
+
+function generateQuestion() {
+    document.getElementById('practice-empty').style.display = 'none';
+    document.getElementById('practice-area').style.display = 'block';
+    document.getElementById('rubric-area').style.display = 'none';
+    document.getElementById('student-answer').value = '';
+    
+    let qas = [];
+    let chaptersToLoad = appData.chapters;
+    if (currentTopicId !== 'all') {
+        chaptersToLoad = appData.chapters.filter(ch => ch.id === currentTopicId);
+    }
+    chaptersToLoad.forEach(ch => {
+        if(ch.qas) {
+            ch.qas.forEach(qa => qas.push({q: qa.q, a: qa.a, chTitle: ch.title}));
+        }
+    });
+
+    if(qas.length === 0) {
+        document.getElementById('practice-empty').style.display = 'block';
+        document.getElementById('practice-area').style.display = 'none';
+        return;
+    }
+
+    const randItem = qas[Math.floor(Math.random() * qas.length)];
+    document.getElementById('question-meta').innerText = randItem.chTitle;
+    document.getElementById('question-text').innerText = randItem.q;
+    
+    window.currentExpectedAnswer = randItem.a;
+}
+
+function showRubric() {
+    document.getElementById('rubric-area').style.display = 'block';
+    const rubricItems = document.getElementById('rubric-items');
+    rubricItems.innerHTML = `
+        <div class="rubric-item">
+            <input type="checkbox" id="rubric1">
+            <label for="rubric1">האם התשובה כוללת את המושגים המרכזיים?</label>
+        </div>
+        <div class="rubric-item">
+            <input type="checkbox" id="rubric2">
+            <label for="rubric2">האם ההסבר מדויק ותואם לחומר הלימוד?</label>
+        </div>
+        <p style="margin-top: 1rem; font-weight: bold;">תשובה מצופה לדוגמה:</p>
+        <p style="background: white; padding: 1rem; border: 1px solid var(--border); border-radius: 6px;">${window.currentExpectedAnswer}</p>
+    `;
+    document.getElementById('feedback-msg').innerText = 'כל הכבוד על התרגול! השווה/י את התשובה שלך למחוון.';
+}
+
+function renderComparison() {
+    const axis = document.getElementById('comparison-axis').value;
+    const resDiv = document.getElementById('comparison-result');
+    if(!axis) {
+        resDiv.innerHTML = '';
+        return;
+    }
+    
+    const compData = {
+        freedom: { s: "שוויון חברתי-כלכלי וצמצום פערים", n: "חירות הפרט מעל הכל" },
+        responsibility: { s: "על המדינה והחברה", n: "על הפרט, משפחתו וקהילתו" },
+        intervention: { s: "מעורבות רבה (לתיקון כשלי שוק)", n: "מעורבות מינימלית ('שומר לילה')" },
+        taxation: { s: "גבוה ופרוגרסיבי", n: "נמוך, כדי לעודד צמיחה" },
+        services: { s: "אוניברסליים", n: "סלקטיביים (מבחן הכנסה)" },
+        inequality: { s: "הכרחי לצמצם ולטפל", n: "טבעי ואף מתמרץ לעבודה" },
+        labor: { s: "הגנה על עובדים, תמיכה באיגודים מקצועיים", n: "שוק עבודה גמיש, התנגדות להתאגדויות" },
+        privatization: { s: "חשדנות, שמירה על שירותים ציבוריים", n: "תמיכה נלהבת בהפרטה לשם התייעלות" },
+        thinkers: { s: "קארל מארקס, ג'ון מיינרד קיינס, אנתוני גידנס", n: "אדם סמית, פרידריך האייק, מילטון פרידמן" },
+        examples: { s: "שוודיה, דנמרק, נורווגיה", n: "ארה\"ב, בריטניה (בעיקר תקופת תאצ'ר)" }
+    };
+    
+    if(compData[axis]) {
+        resDiv.innerHTML = `
+        <table class="comparison-table">
+            <tr>
+                <th class="col-social">הגישה הסוציאל-דמוקרטית</th>
+                <th class="col-liberal">הגישה הנאו-ליברלית</th>
+            </tr>
+            <tr>
+                <td>${compData[axis].s}</td>
+                <td>${compData[axis].n}</td>
+            </tr>
+        </table>`;
+    }
+}
 </script>
 </body>
 </html>
